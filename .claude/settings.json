@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(npx eslint *)",
+      "Bash(timeout 180 npx next build)",
+      "WebFetch(domain:torneo-santana-website.vercel.app)",
+      "WebFetch(domain:docs.google.com)"
+    ]
+  }
+}
