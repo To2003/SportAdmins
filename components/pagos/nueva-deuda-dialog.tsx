@@ -23,11 +23,13 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { equipos, CONCEPTOS_DEUDA, formatARS } from "@/lib/data"
+import { CONCEPTOS_DEUDA, formatARS } from "@/lib/data"
 import { useDeudas } from "@/lib/deudas-store"
+import { useTorneo } from "@/lib/torneo-store"
 
 export function NuevaDeudaDialog() {
   const { crearDeuda } = useDeudas()
+  const { equipos } = useTorneo()
   const [open, setOpen] = useState(false)
   const [tipoConcepto, setTipoConcepto] = useState<string>("")
   const [conceptoOtro, setConceptoOtro] = useState("")

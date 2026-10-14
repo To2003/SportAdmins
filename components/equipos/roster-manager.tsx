@@ -14,10 +14,11 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { RosterBadge } from "@/components/status-badge"
-import { equipos as equiposData, rostersEjemplo, type Equipo, type EstadoRoster } from "@/lib/data"
+import { type Equipo, type EstadoRoster } from "@/lib/data"
+import { useTorneo } from "@/lib/torneo-store"
 
 export function RosterManager() {
-  const [equipos, setEquipos] = useState<Equipo[]>(equiposData)
+  const { equipos, jugadores: todosJugadores, setRoster } = useTorneo()
   const [detalle, setDetalle] = useState<Equipo | null>(null)
   const [rechazando, setRechazando] = useState(false)
   const [comentario, setComentario] = useState("")
@@ -29,7 +30,7 @@ export function RosterManager() {
   }
 
   function setEstado(id: string, estado: EstadoRoster) {
-    setEquipos((prev) => prev.map((e) => (e.id === id ? { ...e, roster: estado } : e)))
+    setRoster(id, estado)
   }
 
   function aprobar() {
@@ -50,7 +51,7 @@ export function RosterManager() {
     setDetalle(null)
   }
 
-  const jugadores = detalle ? rostersEjemplo[detalle.id] ?? [] : []
+  const jugadores = detalle ? todosJugadores.filter((j) => j.equipoId === detalle.id) : []
   const grupos: { titulo: string; estados: EstadoRoster[] }[] = [
     { titulo: "Pendientes de aprobación", estados: ["pendiente"] },
     { titulo: "Aprobados", estados: ["aprobado"] },
@@ -69,7 +70,7 @@ export function RosterManager() {
             </h2>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {lista.map((e) => {
-                const cant = rostersEjemplo[e.id]?.length ?? 0
+                const cant = todosJugadores.filter((j) => j.equipoId === e.id).length
                 const puedeVer = e.roster !== "sin-enviar"
                 return (
                   <Card key={e.id} className="p-0">

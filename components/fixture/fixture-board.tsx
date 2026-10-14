@@ -23,18 +23,16 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { StatusBadge } from "@/components/status-badge"
-import {
-  equipos,
-  partidos as partidosData,
-  canchas,
-  jugadores as todosJugadores,
-  convocatorias as convocatoriasSeed,
-  formatFecha,
-  type Partido,
-} from "@/lib/data"
+import { canchas, convocatorias as convocatoriasSeed, formatFecha, type Partido } from "@/lib/data"
+import { sancionVigente, useTorneo } from "@/lib/torneo-store"
 
 export function FixtureBoard() {
-  const [partidos, setPartidos] = useState<Partido[]>(partidosData)
+  const { partidos, setPartidos, equipos, jugadores: todosJugadores, jornadas: jornadasConfig, jornadaActual, sanciones } = useTorneo()
+  const suspendidos = new Set(
+    sanciones
+      .filter((s) => s.tipo === "suspension" && s.jugadorId && sancionVigente(s, jornadaActual))
+      .map((s) => s.jugadorId),
+  )
   const [editing, setEditing] = useState<Partido | null>(null)
   const [setsA, setSetsA] = useState("")
   const [setsB, setSetsB] = useState("")
@@ -46,7 +44,7 @@ export function FixtureBoard() {
   const [equipoB, setEquipoB] = useState("")
   const [cancha, setCancha] = useState("")
   const [hora, setHora] = useState("")
-  const [jornada, setJornada] = useState("5")
+  const [jornada, setJornada] = useState(String(jornadaActual + 1))
 
   const jornadas = useMemo(() => {
     const grupos = new Map<number, Partido[]>()
@@ -71,7 +69,7 @@ export function FixtureBoard() {
     const nuevo: Partido = {
       id: `p${Date.now()}`,
       jornada: Number(jornada),
-      fecha: "2026-08-16",
+      fecha: jornadasConfig.find((j) => j.numero === Number(jornada))?.fecha ?? jornadasConfig[jornadasConfig.length - 1].fecha,
       equipoA,
       equipoB,
       cancha,
@@ -298,10 +296,17 @@ export function FixtureBoard() {
                     <div className="max-h-32 space-y-1 overflow-y-auto rounded-lg border border-border p-2">
                       {roster.map((j) => (
                         <label key={j.id} className="flex items-center justify-between gap-2 py-1 text-sm">
-                          <span className="truncate">
-                            #{j.numero} {j.nombre}
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span className="truncate">
+                              #{j.numero} {j.nombre}
+                            </span>
+                            {suspendidos.has(j.id) && <StatusBadge tone="danger">Suspendido</StatusBadge>}
                           </span>
-                          <Switch checked={presentes.includes(j.id)} onCheckedChange={() => togglePresente(j.id)} />
+                          <Switch
+                            checked={presentes.includes(j.id)}
+                            disabled={suspendidos.has(j.id)}
+                            onCheckedChange={() => togglePresente(j.id)}
+                          />
                         </label>
                       ))}
                     </div>

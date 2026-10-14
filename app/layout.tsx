@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next'
 import { Inter, Space_Grotesk } from 'next/font/google'
 import { Toaster } from '@/components/ui/sonner'
 import { DeudasProvider } from '@/lib/deudas-store'
+import { TorneoProvider } from '@/lib/torneo-store'
 import './globals.css'
 
 const inter = Inter({
@@ -60,7 +61,9 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="font-sans antialiased">
-        <DeudasProvider>{children}</DeudasProvider>
+        <TorneoProvider>
+          <DeudasProvider>{children}</DeudasProvider>
+        </TorneoProvider>
         <Toaster position="top-center" richColors />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>

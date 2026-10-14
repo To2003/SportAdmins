@@ -21,6 +21,7 @@ interface DeudasContextValue {
   enviarComprobante: (deudaId: string) => void
   aprobarDeuda: (deudaId: string) => void
   rechazarDeuda: (deudaId: string) => void
+  registrarPagoManual: (deudaId: string) => void
 }
 
 const DeudasContext = createContext<DeudasContextValue | null>(null)
@@ -53,16 +54,25 @@ export function DeudasProvider({ children }: { children: ReactNode }) {
                   estado: "en_revision",
                   comprobanteImagen: COMPROBANTES_DEMO[Math.floor(Math.random() * COMPROBANTES_DEMO.length)],
                   comprobanteSubidoEl: new Date().toISOString(),
+                  medio: "transferencia",
                 }
               : d,
           ),
         )
       },
       aprobarDeuda(deudaId) {
-        setDeudas((prev) => prev.map((d) => (d.id === deudaId ? { ...d, estado: "aprobado" } : d)))
+        const resueltoEl = new Date().toISOString()
+        setDeudas((prev) => prev.map((d) => (d.id === deudaId ? { ...d, estado: "aprobado", resueltoEl } : d)))
       },
       rechazarDeuda(deudaId) {
-        setDeudas((prev) => prev.map((d) => (d.id === deudaId ? { ...d, estado: "rechazado" } : d)))
+        const resueltoEl = new Date().toISOString()
+        setDeudas((prev) => prev.map((d) => (d.id === deudaId ? { ...d, estado: "rechazado", resueltoEl } : d)))
+      },
+      registrarPagoManual(deudaId) {
+        const resueltoEl = new Date().toISOString()
+        setDeudas((prev) =>
+          prev.map((d) => (d.id === deudaId ? { ...d, estado: "aprobado", medio: "efectivo", resueltoEl } : d)),
+        )
       },
     }),
     [deudas],

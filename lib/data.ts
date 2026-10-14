@@ -73,15 +73,17 @@ export interface Deuda {
   estado: EstadoDeuda
   comprobanteImagen?: string
   comprobanteSubidoEl?: string
+  medio?: "transferencia" | "efectivo"
+  resueltoEl?: string // fecha en que el admin aprobó/rechazó o registró el pago
 }
 
 export const deudasIniciales: Deuda[] = [
   // Los Topadores (e1) — historial completo, usado también en la app del capitán
-  { id: "d1", equipoId: "e1", concepto: "Inscripción — Apertura 2026", monto: 36000, creadoEl: "2026-05-01T00:00:00", estado: "aprobado" },
-  { id: "d2", equipoId: "e1", concepto: "Fecha 1 — Cuota de partido", monto: 9000, creadoEl: "2026-06-14T00:00:00", estado: "aprobado" },
-  { id: "d3", equipoId: "e1", concepto: "Fecha 2 — Cuota de partido", monto: 9000, creadoEl: "2026-06-28T00:00:00", estado: "aprobado" },
+  { id: "d1", equipoId: "e1", concepto: "Inscripción — Apertura 2026", monto: 36000, creadoEl: "2026-05-01T00:00:00", estado: "aprobado", medio: "efectivo", resueltoEl: "2026-05-03T19:00:00" },
+  { id: "d2", equipoId: "e1", concepto: "Fecha 1 — Cuota de partido", monto: 9000, creadoEl: "2026-06-14T00:00:00", estado: "aprobado", medio: "transferencia", comprobanteImagen: "/comprobantes/comprobante-1.png", comprobanteSubidoEl: "2026-06-15T10:00:00", resueltoEl: "2026-06-15T18:30:00" },
+  { id: "d3", equipoId: "e1", concepto: "Fecha 2 — Cuota de partido", monto: 9000, creadoEl: "2026-06-28T00:00:00", estado: "aprobado", medio: "transferencia", comprobanteImagen: "/comprobantes/comprobante-3.png", comprobanteSubidoEl: "2026-06-28T21:00:00", resueltoEl: "2026-06-29T09:10:00" },
   { id: "d4", equipoId: "e1", concepto: "Fecha 3 — Cuota de partido", monto: 9000, creadoEl: "2026-07-12T00:00:00", estado: "pendiente" },
-  { id: "d5", equipoId: "e1", concepto: "Multa por entrega tardía de resultado", monto: 3000, creadoEl: "2026-07-15T00:00:00", estado: "rechazado", comprobanteImagen: "/comprobantes/comprobante-2.png", comprobanteSubidoEl: "2026-07-16T09:00:00" },
+  { id: "d5", equipoId: "e1", concepto: "Multa por entrega tardía de resultado", monto: 3000, creadoEl: "2026-07-15T00:00:00", estado: "rechazado", comprobanteImagen: "/comprobantes/comprobante-2.png", comprobanteSubidoEl: "2026-07-16T09:00:00", medio: "transferencia", resueltoEl: "2026-07-16T20:00:00" },
   { id: "d6", equipoId: "e1", concepto: "Fecha 4 — Cuota de partido", monto: 9000, creadoEl: "2026-07-26T00:00:00", estado: "en_revision", comprobanteImagen: "/comprobantes/comprobante-2.png", comprobanteSubidoEl: "2026-08-05T10:47:00" },
 
   // Otros equipos — en revisión, esperando aprobación en el Buzón
@@ -189,3 +191,174 @@ export const jugadoresCapitan: Jugador[] = [
 
 // ---- Listado plano de jugadores (todos los planteles cargados), para el panel admin ----
 export const jugadores: Jugador[] = [...jugadoresCapitan, ...Object.values(rostersEjemplo).flat()]
+
+// ---- Configuración del torneo (1.4.2.1) ----
+export type FormatoTorneo = "liga" | "liga-playoff" | "grupos-playoff"
+
+export interface ConfigTorneo {
+  nombre: string
+  temporada: string
+  organizador: string
+  fechaInicio: string
+  cantidadJornadas: number
+  formato: FormatoTorneo
+  setsParaGanar: number
+  puntosVictoria: number // 3-0 / 3-1
+  puntosVictoriaAjustada: number // 3-2
+  puntosDerrotaAjustada: number // 2-3
+  minimoPartidosPlayoff: number
+  inscripcionAbierta: boolean
+}
+
+export const FORMATOS: Record<FormatoTorneo, string> = {
+  liga: "Liga (todos contra todos)",
+  "liga-playoff": "Liga + playoff",
+  "grupos-playoff": "Fase de grupos + playoff",
+}
+
+export const configTorneoInicial: ConfigTorneo = {
+  nombre: TORNEO.nombre,
+  temporada: TORNEO.temporada,
+  organizador: "Asociación Vóley Amateur Metropolitana",
+  fechaInicio: "2026-07-19",
+  cantidadJornadas: 13,
+  formato: "liga-playoff",
+  setsParaGanar: 3,
+  puntosVictoria: 3,
+  puntosVictoriaAjustada: 2,
+  puntosDerrotaAjustada: 1,
+  minimoPartidosPlayoff: PARTIDOS_MINIMOS_PLAYOFF,
+  inscripcionAbierta: false,
+}
+
+// ---- Fee por fecha (1.4.4.1) ----
+export interface ConfigFees {
+  inscripcion: number
+  cuotaPorFecha: number
+  vencimientoDias: number // días después de la fecha para pagar antes de quedar moroso
+  bloqueoAutomatico: boolean // bloquear al equipo si supera el tope de deuda
+  topeDeuda: number
+}
+
+export const configFeesInicial: ConfigFees = {
+  inscripcion: 36000,
+  cuotaPorFecha: 9000,
+  vencimientoDias: 7,
+  bloqueoAutomatico: true,
+  topeDeuda: 30000,
+}
+
+// ---- Jornadas / fechas (1.4.2.4) ----
+export type EstadoJornada = "jugada" | "en-curso" | "programada" | "reprogramada"
+
+export interface Jornada {
+  numero: number
+  fecha: string
+  estado: EstadoJornada
+  fee: number
+}
+
+export const jornadasIniciales: Jornada[] = [
+  { numero: 1, fecha: "2026-07-19", estado: "jugada", fee: 9000 },
+  { numero: 2, fecha: "2026-07-26", estado: "jugada", fee: 9000 },
+  { numero: 3, fecha: "2026-08-02", estado: "jugada", fee: 9000 },
+  { numero: 4, fecha: "2026-08-09", estado: "en-curso", fee: 9000 },
+  { numero: 5, fecha: "2026-08-16", estado: "programada", fee: 9000 },
+  { numero: 6, fecha: "2026-08-23", estado: "programada", fee: 9000 },
+]
+
+// ---- Sanciones (1.4.3) ----
+export type TipoSancion = "amonestacion" | "suspension" | "multa"
+
+export const TIPOS_SANCION: Record<TipoSancion, string> = {
+  amonestacion: "Amonestación",
+  suspension: "Suspensión por fechas",
+  multa: "Multa económica",
+}
+
+export interface Sancion {
+  id: string
+  equipoId: string
+  jugadorId?: string // vacío = sanción al equipo
+  tipo: TipoSancion
+  motivo: string
+  jornadaInicio: number
+  fechas: number // fechas de suspensión (0 si no aplica)
+  monto?: number
+  creadaEl: string
+  anulada?: boolean
+}
+
+export const sancionesIniciales: Sancion[] = [
+  { id: "s1", equipoId: "e3", jugadorId: "j2", tipo: "suspension", motivo: "Agresión verbal al árbitro", jornadaInicio: 3, fechas: 2, creadaEl: "2026-08-03T10:00:00" },
+  { id: "s2", equipoId: "e1", jugadorId: "jc2", tipo: "suspension", motivo: "Doble tarjeta roja (expulsión)", jornadaInicio: 4, fechas: 1, creadaEl: "2026-08-03T11:00:00" },
+  { id: "s3", equipoId: "e1", tipo: "multa", motivo: "Entrega tardía de resultado", jornadaInicio: 2, fechas: 0, monto: 3000, creadaEl: "2026-07-15T00:00:00" },
+  { id: "s4", equipoId: "e9", jugadorId: "j13", tipo: "amonestacion", motivo: "Conducta antideportiva", jornadaInicio: 3, fechas: 0, creadaEl: "2026-08-02T13:00:00" },
+  { id: "s5", equipoId: "e13", jugadorId: "j16", tipo: "suspension", motivo: "Jugó sin estar habilitado", jornadaInicio: 1, fechas: 2, creadaEl: "2026-07-20T09:00:00" },
+  { id: "s6", equipoId: "e11", tipo: "multa", motivo: "Reprogramación fuera de término", jornadaInicio: 4, fechas: 0, monto: 6000, creadaEl: "2026-08-01T00:00:00" },
+]
+
+// ---- Usuarios y permisos (1.4.1) ----
+export type Rol = "admin" | "tesorero" | "delegado"
+
+export const ROLES: Record<Rol, string> = {
+  admin: "Administrador",
+  tesorero: "Tesorero",
+  delegado: "Delegado de equipo",
+}
+
+export type Permiso =
+  | "torneo.configurar"
+  | "equipos.gestionar"
+  | "fixture.gestionar"
+  | "resultados.cargar"
+  | "pagos.validar"
+  | "pagos.configurar"
+  | "sanciones.gestionar"
+  | "usuarios.gestionar"
+  | "plantel.propio"
+  | "pagos.propios"
+
+export const PERMISOS: { id: Permiso; label: string; grupo: string }[] = [
+  { id: "torneo.configurar", label: "Crear y configurar el torneo", grupo: "Torneo" },
+  { id: "equipos.gestionar", label: "Gestionar equipos y jugadores", grupo: "Torneo" },
+  { id: "fixture.gestionar", label: "Armar fixture y jornadas", grupo: "Torneo" },
+  { id: "resultados.cargar", label: "Cargar resultados", grupo: "Torneo" },
+  { id: "pagos.validar", label: "Validar comprobantes y registrar pagos", grupo: "Pagos" },
+  { id: "pagos.configurar", label: "Configurar fees", grupo: "Pagos" },
+  { id: "sanciones.gestionar", label: "Registrar y anular sanciones", grupo: "Disciplina" },
+  { id: "usuarios.gestionar", label: "Gestionar usuarios y permisos", grupo: "Usuarios" },
+  { id: "plantel.propio", label: "Cargar plantel de su equipo", grupo: "Delegado" },
+  { id: "pagos.propios", label: "Subir comprobantes de su equipo", grupo: "Delegado" },
+]
+
+export const permisosIniciales: Record<Rol, Permiso[]> = {
+  admin: PERMISOS.map((p) => p.id).filter((p) => p !== "plantel.propio" && p !== "pagos.propios"),
+  tesorero: ["pagos.validar", "pagos.configurar"],
+  delegado: ["plantel.propio", "pagos.propios"],
+}
+
+export interface Usuario {
+  id: string
+  nombre: string
+  email: string
+  rol: Rol
+  equipoId?: string
+  activo: boolean
+  invitacionPendiente?: boolean
+}
+
+export const usuariosIniciales: Usuario[] = [
+  { id: "u1", nombre: "Carla Benítez", email: "carla@torneosantana.com", rol: "admin", activo: true },
+  { id: "u2", nombre: "Hernán Quiroga", email: "hernan@torneosantana.com", rol: "admin", activo: true },
+  { id: "u3", nombre: "Mariela Ortiz", email: "tesoreria@torneosantana.com", rol: "tesorero", activo: true },
+  ...equipos.map<Usuario>((e, i) => ({
+    id: `ud${i + 1}`,
+    nombre: e.capitan,
+    email: `${e.capitan.split(" ")[0].toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")}@mail.com`,
+    rol: "delegado",
+    equipoId: e.id,
+    activo: e.roster !== "sin-enviar",
+    invitacionPendiente: e.roster === "sin-enviar",
+  })),
+]

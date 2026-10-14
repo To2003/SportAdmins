@@ -15,7 +15,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { SaldoBadge, StatusBadge } from "@/components/status-badge"
-import { equipos as equiposData, formatARS, formatFecha, type Equipo } from "@/lib/data"
+import { formatARS, formatFecha } from "@/lib/data"
+import { useTorneo } from "@/lib/torneo-store"
 
 type Sort = "none" | "asc" | "desc"
 
@@ -26,7 +27,7 @@ function saldoClass(saldo: number) {
 }
 
 export function DelinquencyTable() {
-  const [equipos, setEquipos] = useState<Equipo[]>(equiposData)
+  const { equipos, setBloqueo } = useTorneo()
   const [sort, setSort] = useState<Sort>("asc")
 
   const ordenados = useMemo(() => {
@@ -39,7 +40,7 @@ export function DelinquencyTable() {
   }
 
   function toggleBloqueo(id: string, value: boolean) {
-    setEquipos((prev) => prev.map((e) => (e.id === id ? { ...e, bloqueado: value } : e)))
+    setBloqueo(id, value)
     const eq = equipos.find((e) => e.id === id)
     if (eq) {
       value

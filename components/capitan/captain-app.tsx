@@ -12,18 +12,19 @@ import {
   IdCard,
   ArrowLeft,
   UserPlus,
+  Ban,
+  LogOut,
 } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { PagoBadge } from "@/components/status-badge"
+import { PagoBadge, StatusBadge } from "@/components/status-badge"
 import {
   equipoCapitan,
-  jugadoresCapitan,
-  partidos,
   formatARS,
   formatFecha,
   type Partido,
@@ -31,15 +32,11 @@ import {
   type Deuda,
 } from "@/lib/data"
 import { useDeudas } from "@/lib/deudas-store"
+import { sancionVigente, useTorneo } from "@/lib/torneo-store"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 
 type Tab = "inicio" | "plantel" | "pagos"
-
-// Partidos del equipo del capitán (Los Topadores)
-const misPartidos: Partido[] = partidos.filter(
-  (p) => p.equipoA === equipoCapitan.nombre || p.equipoB === equipoCapitan.nombre,
-)
 
 function rivalDe(p: Partido) {
   return p.equipoA === equipoCapitan.nombre ? p.equipoB : p.equipoA
@@ -55,11 +52,23 @@ function resultadoDe(p: Partido) {
 export function CaptainApp() {
   const [tab, setTab] = useState<Tab>("inicio")
   const { deudas, enviarComprobante } = useDeudas()
+  const router = useRouter()
+  const { partidos, jugadores: todosJugadores, guardarJugador, sanciones, jornadaActual, sesion, cerrarSesion } =
+    useTorneo()
+  const suspendidos = new Set(
+    sanciones
+      .filter((s) => s.tipo === "suspension" && s.jugadorId && sancionVigente(s, jornadaActual))
+      .map((s) => s.jugadorId),
+  )
+  // Partidos del equipo del capitán (Los Topadores)
+  const misPartidos: Partido[] = partidos.filter(
+    (p) => p.equipoA === equipoCapitan.nombre || p.equipoB === equipoCapitan.nombre,
+  )
+  const jugadores = todosJugadores.filter((j) => j.equipoId === equipoCapitan.id)
 
   const [payOpen, setPayOpen] = useState(false)
   const [deudaSeleccionada, setDeudaSeleccionada] = useState<Deuda | null>(null)
 
-  const [jugadores, setJugadores] = useState<Jugador[]>(jugadoresCapitan)
   const [addPlayerOpen, setAddPlayerOpen] = useState(false)
   const [nombreJugador, setNombreJugador] = useState("")
   const [numeroJugador, setNumeroJugador] = useState("")
@@ -103,7 +112,7 @@ export function CaptainApp() {
       dni: dniJugador.trim(),
       equipoId: equipoCapitan.id,
     }
-    setJugadores((prev) => [...prev, nuevo])
+    guardarJugador(nuevo)
     toast.success("Jugador agregado", {
       description: `${nuevo.nombre} queda sujeto a la aprobación de la organización.`,
     })
@@ -124,13 +133,27 @@ export function CaptainApp() {
             <p className="truncate font-display text-sm font-semibold leading-tight">{equipoCapitan.nombre}</p>
             <p className="truncate text-xs text-muted-foreground">Cap. {equipoCapitan.capitan}</p>
           </div>
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="size-3.5" />
-            Admin
-          </Link>
+          {sesion?.rol === "delegado" ? (
+            <button
+              type="button"
+              onClick={() => {
+                cerrarSesion()
+                router.push("/login")
+              }}
+              className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <LogOut className="size-3.5" />
+              Salir
+            </button>
+          ) : (
+            <Link
+              href="/dashboard"
+              className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="size-3.5" />
+              Admin
+            </Link>
+          )}
         </div>
       </header>
 
@@ -234,6 +257,11 @@ export function CaptainApp() {
                       DNI {j.dni}
                     </p>
                   </div>
+                  {suspendidos.has(j.id) && (
+                    <StatusBadge tone="danger" icon={<Ban className="size-3" />}>
+                      Suspendido
+                    </StatusBadge>
+                  )}
                 </CardContent>
               </Card>
             ))}

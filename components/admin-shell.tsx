@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import {
   LayoutDashboard,
   Receipt,
@@ -15,24 +15,31 @@ import {
   Menu,
   X,
   ExternalLink,
+  Trophy,
+  UserCog,
+  LogOut,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { TORNEO } from "@/lib/data"
+import { ROLES, type Permiso } from "@/lib/data"
 import { useDeudas } from "@/lib/deudas-store"
+import { useTorneo } from "@/lib/torneo-store"
 
-const nav = [
+const nav: { href: string; label: string; icon: typeof LayoutDashboard; permiso?: Permiso }[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/pagos", label: "Pagos", icon: Receipt },
-  { href: "/fixture", label: "Fixture", icon: CalendarDays },
-  { href: "/equipos", label: "Equipos", icon: Users },
-  { href: "/tesoreria", label: "Tesorería", icon: Landmark },
-  { href: "/avisos", label: "Avisos", icon: Megaphone },
-  { href: "/sanciones", label: "Sanciones", icon: ShieldAlert },
+  { href: "/torneo", label: "Torneo", icon: Trophy, permiso: "torneo.configurar" },
+  { href: "/equipos", label: "Equipos", icon: Users, permiso: "equipos.gestionar" },
+  { href: "/fixture", label: "Fixture", icon: CalendarDays, permiso: "fixture.gestionar" },
+  { href: "/pagos", label: "Pagos", icon: Receipt, permiso: "pagos.validar" },
+  { href: "/sanciones", label: "Sanciones", icon: ShieldAlert, permiso: "sanciones.gestionar" },
+  { href: "/usuarios", label: "Usuarios", icon: UserCog, permiso: "usuarios.gestionar" },
+  { href: "/tesoreria", label: "Tesorería", icon: Landmark, permiso: "pagos.validar" },
+  { href: "/avisos", label: "Avisos", icon: Megaphone, permiso: "equipos.gestionar" },
 ]
 
 function Brand() {
+  const { config } = useTorneo()
   return (
     <div className="flex items-center gap-2.5">
       <div className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
@@ -40,7 +47,7 @@ function Brand() {
       </div>
       <div className="leading-tight">
         <p className="font-display text-sm font-bold tracking-tight text-sidebar-foreground">SaqueCentral</p>
-        <p className="text-[11px] text-muted-foreground">{TORNEO.temporada}</p>
+        <p className="text-[11px] text-muted-foreground">{config.temporada}</p>
       </div>
     </div>
   )
@@ -49,10 +56,11 @@ function Brand() {
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()
   const { deudas } = useDeudas()
+  const { puede } = useTorneo()
   const pendientes = deudas.filter((d) => d.estado === "en_revision").length
   return (
     <nav className="flex flex-1 flex-col gap-1">
-      {nav.map((item) => {
+      {nav.filter((item) => !item.permiso || puede(item.permiso)).map((item) => {
         const active = pathname === item.href || pathname.startsWith(item.href + "/")
         const Icon = item.icon
         const badge = item.href === "/pagos" ? pendientes : 0
@@ -83,6 +91,8 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 function SidebarInner({ onNavigate }: { onNavigate?: () => void }) {
+  const router = useRouter()
+  const { sesion, cerrarSesion } = useTorneo()
   return (
     <div className="flex h-full flex-col gap-6 p-4">
       <Brand />
@@ -97,6 +107,26 @@ function SidebarInner({ onNavigate }: { onNavigate?: () => void }) {
           App del capitán
         </span>
       </Link>
+      <div className="flex items-center gap-2.5 border-t border-sidebar-border pt-4">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent font-display text-xs font-bold text-primary">
+          {(sesion?.nombre ?? "Demo").split(" ").map((p) => p[0]).slice(0, 2).join("")}
+        </span>
+        <div className="min-w-0 flex-1 leading-tight">
+          <p className="truncate text-sm font-medium text-sidebar-foreground">{sesion?.nombre ?? "Modo demo"}</p>
+          <p className="truncate text-[11px] text-muted-foreground">{ROLES[sesion?.rol ?? "admin"]}</p>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Cerrar sesión"
+          onClick={() => {
+            cerrarSesion()
+            router.push("/login")
+          }}
+        >
+          <LogOut className="size-4" />
+        </Button>
+      </div>
     </div>
   )
 }
@@ -104,10 +134,17 @@ function SidebarInner({ onNavigate }: { onNavigate?: () => void }) {
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
+  const router = useRouter()
+  const { sesion } = useTorneo()
 
   useEffect(() => {
     setOpen(false)
   }, [pathname])
+
+  // Los delegados solo tienen acceso a la app del capitán
+  useEffect(() => {
+    if (sesion?.rol === "delegado") router.replace("/capitan")
+  }, [sesion, router])
 
   return (
     <div className="min-h-svh bg-background">

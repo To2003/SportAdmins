@@ -19,15 +19,14 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
-import { equipos, formatARS, formatFechaHora, type Deuda } from "@/lib/data"
+import { formatARS, formatFechaHora, type Deuda } from "@/lib/data"
 import { useDeudas } from "@/lib/deudas-store"
-
-function nombreEquipo(equipoId: string) {
-  return equipos.find((e) => e.id === equipoId)?.nombre ?? "—"
-}
+import { useTorneo } from "@/lib/torneo-store"
 
 export function PaymentInbox() {
   const { deudas, aprobarDeuda, rechazarDeuda } = useDeudas()
+  const { equipos } = useTorneo()
+  const nombreEquipo = (equipoId: string) => equipos.find((e) => e.id === equipoId)?.nombre ?? "—"
   const [equipoFilter, setEquipoFilter] = useState<string>("todos")
   const [preview, setPreview] = useState<Deuda | null>(null)
 
