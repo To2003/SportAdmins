@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Pencil, Trash2, Phone, Lock, Users } from "lucide-react"
+import { Plus, Pencil, Trash2, Phone, Users } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -15,14 +15,16 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { RosterBadge, SaldoBadge, StatusBadge } from "@/components/status-badge"
+import { SaldoBadge } from "@/components/status-badge"
 import { type Equipo } from "@/lib/data"
+import { saldoEquipo, useDeudas } from "@/lib/deudas-store"
 import { useTorneo } from "@/lib/torneo-store"
 
 const vacio = { nombre: "", capitan: "", telefono: "" }
 
 export function TeamsManager() {
   const { equipos, jugadores, guardarEquipo, eliminarEquipo, config } = useTorneo()
+  const { deudas } = useDeudas()
   const [editando, setEditando] = useState<Equipo | null>(null)
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState(vacio)
@@ -56,10 +58,6 @@ export function TeamsManager() {
             nombre: form.nombre.trim(),
             capitan: form.capitan.trim(),
             telefono: form.telefono.trim(),
-            saldo: 0,
-            ultimoPago: new Date().toISOString().slice(0, 10),
-            bloqueado: false,
-            roster: "sin-enviar",
           },
     )
     toast.success(editando ? "Equipo actualizado" : "Equipo inscripto", {
@@ -116,17 +114,11 @@ export function TeamsManager() {
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <RosterBadge estado={e.roster} />
-                  <SaldoBadge saldo={e.saldo} />
-                  {e.bloqueado && (
-                    <StatusBadge tone="danger" icon={<Lock className="size-3" />}>
-                      Bloqueado
-                    </StatusBadge>
-                  )}
+                  <SaldoBadge saldo={saldoEquipo(deudas, e.id)} />
                 </div>
                 <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Users className="size-3.5" />
-                  {cant} jugadores en lista
+                  {cant} jugadores
                 </p>
               </div>
             </Card>
@@ -141,7 +133,7 @@ export function TeamsManager() {
             <DialogDescription>
               {editando
                 ? "Actualizá los datos del equipo y su delegado."
-                : "El delegado recibirá una invitación para cargar la lista de buena fe."}
+                : "Después invitá al delegado desde Usuarios."}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4 py-2">

@@ -8,13 +8,10 @@ import {
   Receipt,
   CalendarDays,
   Users,
-  Landmark,
-  Megaphone,
   ShieldAlert,
   Volleyball,
   Menu,
   X,
-  ExternalLink,
   Trophy,
   UserCog,
   LogOut,
@@ -26,17 +23,21 @@ import { ROLES, type Permiso } from "@/lib/data"
 import { useDeudas } from "@/lib/deudas-store"
 import { useTorneo } from "@/lib/torneo-store"
 
-const nav: { href: string; label: string; icon: typeof LayoutDashboard; permiso?: Permiso }[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/torneo", label: "Torneo", icon: Trophy, permiso: "torneo.configurar" },
-  { href: "/equipos", label: "Equipos", icon: Users, permiso: "equipos.gestionar" },
-  { href: "/fixture", label: "Fixture", icon: CalendarDays, permiso: "fixture.gestionar" },
-  { href: "/pagos", label: "Pagos", icon: Receipt, permiso: "pagos.validar" },
-  { href: "/sanciones", label: "Sanciones", icon: ShieldAlert, permiso: "sanciones.gestionar" },
-  { href: "/usuarios", label: "Usuarios", icon: UserCog, permiso: "usuarios.gestionar" },
-  { href: "/tesoreria", label: "Tesorería", icon: Landmark, permiso: "pagos.validar" },
-  { href: "/avisos", label: "Avisos", icon: Megaphone, permiso: "equipos.gestionar" },
+// Menú por rol (1.4.1.4): cada entrada se muestra si el rol tiene alguno de sus permisos
+const nav: { href: string; label: string; icon: typeof LayoutDashboard; permisos: Permiso[] }[] = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, permisos: ["panel.ver"] },
+  { href: "/torneo", label: "Torneo", icon: Trophy, permisos: ["torneo.configurar"] },
+  { href: "/equipos", label: "Equipos", icon: Users, permisos: ["equipos.gestionar"] },
+  { href: "/fixture", label: "Fixture", icon: CalendarDays, permisos: ["fixture.gestionar", "resultados.cargar", "fixture.ver"] },
+  { href: "/pagos", label: "Pagos", icon: Receipt, permisos: ["pagos.validar", "pagos.configurar", "pagos.ver"] },
+  { href: "/sanciones", label: "Sanciones", icon: ShieldAlert, permisos: ["sanciones.gestionar", "sanciones.ver"] },
+  { href: "/usuarios", label: "Usuarios", icon: UserCog, permisos: ["usuarios.gestionar"] },
 ]
+
+function usePermitidos() {
+  const { puede } = useTorneo()
+  return nav.filter((item) => item.permisos.some(puede))
+}
 
 function Brand() {
   const { config } = useTorneo()
@@ -57,13 +58,14 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()
   const { deudas } = useDeudas()
   const { puede } = useTorneo()
+  const permitidos = usePermitidos()
   const pendientes = deudas.filter((d) => d.estado === "en_revision").length
   return (
     <nav className="flex flex-1 flex-col gap-1">
-      {nav.filter((item) => !item.permiso || puede(item.permiso)).map((item) => {
+      {permitidos.map((item) => {
         const active = pathname === item.href || pathname.startsWith(item.href + "/")
         const Icon = item.icon
-        const badge = item.href === "/pagos" ? pendientes : 0
+        const badge = item.href === "/pagos" && puede("pagos.validar") ? pendientes : 0
         return (
           <Link
             key={item.href}
@@ -97,16 +99,6 @@ function SidebarInner({ onNavigate }: { onNavigate?: () => void }) {
     <div className="flex h-full flex-col gap-6 p-4">
       <Brand />
       <NavLinks onNavigate={onNavigate} />
-      <Link
-        href="/capitan"
-        onClick={onNavigate}
-        className="flex items-center justify-between gap-2 rounded-lg border border-sidebar-border bg-sidebar-accent/40 px-3 py-2.5 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent"
-      >
-        <span className="flex items-center gap-2">
-          <ExternalLink className="size-4 text-primary" />
-          App del capitán
-        </span>
-      </Link>
       <div className="flex items-center gap-2.5 border-t border-sidebar-border pt-4">
         <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent font-display text-xs font-bold text-primary">
           {(sesion?.nombre ?? "Demo").split(" ").map((p) => p[0]).slice(0, 2).join("")}
@@ -135,16 +127,17 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
-  const { sesion } = useTorneo()
+  const permitidos = usePermitidos()
 
   useEffect(() => {
     setOpen(false)
   }, [pathname])
 
-  // Los delegados solo tienen acceso a la app del capitán
+  // Una ruta fuera de los permisos del rol redirige a la primera permitida
+  const permitida = permitidos.some((item) => pathname === item.href || pathname.startsWith(item.href + "/"))
   useEffect(() => {
-    if (sesion?.rol === "delegado") router.replace("/capitan")
-  }, [sesion, router])
+    if (!permitida && permitidos[0]) router.replace(permitidos[0].href)
+  }, [permitida, permitidos, router])
 
   return (
     <div className="min-h-svh bg-background">

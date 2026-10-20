@@ -26,7 +26,7 @@ export function LoginForm() {
   function entrar(u: Usuario) {
     iniciarSesion(u)
     toast.success(`Hola, ${u.nombre.split(" ")[0]}`, { description: ROLES[u.rol] })
-    router.push(u.rol === "delegado" ? "/capitan" : "/dashboard")
+    router.push(u.rol === "delegado" ? "/fixture" : "/dashboard")
   }
 
   function ingresar(e: React.FormEvent) {

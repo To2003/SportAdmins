@@ -29,15 +29,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { PlayoffBadge, StatusBadge } from "@/components/status-badge"
-import { convocatorias, type Jugador } from "@/lib/data"
+import { StatusBadge } from "@/components/status-badge"
+import { type Jugador } from "@/lib/data"
 import { sancionVigente, useTorneo } from "@/lib/torneo-store"
 
 const vacio = { nombre: "", numero: "", dni: "", equipoId: "" }
 
 export function PlayersPanel() {
-  const { jugadores, equipos, partidos, sanciones, jornadaActual, config, guardarJugador, eliminarJugador } =
-    useTorneo()
+  const { jugadores, equipos, sanciones, jornadaActual, guardarJugador, eliminarJugador } = useTorneo()
   const [filtro, setFiltro] = useState("todos")
   const [busqueda, setBusqueda] = useState("")
   const [open, setOpen] = useState(false)
@@ -62,11 +61,10 @@ export function PlayersPanel() {
         .map((j) => ({
           ...j,
           equipoNombre: equipos.find((e) => e.id === j.equipoId)?.nombre ?? "—",
-          jugados: partidos.filter((p) => p.setsA !== null && convocatorias[p.id]?.includes(j.id)).length,
           suspendido: suspendidos.has(j.id),
         }))
         .sort((a, b) => a.equipoNombre.localeCompare(b.equipoNombre) || a.numero - b.numero),
-    [jugadores, equipos, partidos, filtro, busqueda, suspendidos],
+    [jugadores, equipos, filtro, busqueda, suspendidos],
   )
 
   function abrirNuevo() {
@@ -129,7 +127,7 @@ export function PlayersPanel() {
         Suspendido
       </StatusBadge>
     ) : (
-      <PlayoffBadge jugados={j.jugados} />
+      <StatusBadge tone="neutral">Sin sanción</StatusBadge>
     )
 
   return (
@@ -162,10 +160,7 @@ export function PlayersPanel() {
         </Button>
       </div>
 
-      <p className="text-sm text-muted-foreground text-pretty">
-        {filas.length} jugadores · para jugar el playoff cada jugador necesita al menos {config.minimoPartidosPlayoff}{" "}
-        partidos en la fase regular.
-      </p>
+      <p className="text-sm text-muted-foreground text-pretty">{filas.length} jugadores</p>
 
       {/* Desktop table */}
       <Card className="hidden p-0 md:block">
@@ -175,7 +170,6 @@ export function PlayersPanel() {
               <TableHead className="pl-4">Jugador</TableHead>
               <TableHead>DNI</TableHead>
               <TableHead>Equipo</TableHead>
-              <TableHead className="text-right">PJ</TableHead>
               <TableHead className="text-right">Estado</TableHead>
               <TableHead className="pr-4 text-right">Acciones</TableHead>
             </TableRow>
@@ -193,9 +187,6 @@ export function PlayersPanel() {
                 </TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">{j.dni}</TableCell>
                 <TableCell className="text-muted-foreground">{j.equipoNombre}</TableCell>
-                <TableCell className="text-right font-mono font-semibold text-foreground">
-                  {j.jugados}/{config.minimoPartidosPlayoff}
-                </TableCell>
                 <TableCell className="text-right">{estado(j)}</TableCell>
                 <TableCell className="pr-4">{acciones(j)}</TableCell>
               </TableRow>
@@ -223,12 +214,7 @@ export function PlayersPanel() {
                 </div>
                 {acciones(j)}
               </div>
-              <div className="flex items-center justify-between gap-3 px-4">
-                <span className="font-mono text-sm font-semibold text-foreground">
-                  {j.jugados}/{config.minimoPartidosPlayoff} PJ
-                </span>
-                {estado(j)}
-              </div>
+              <div className="flex items-center justify-end gap-3 px-4">{estado(j)}</div>
             </Card>
           </li>
         ))}

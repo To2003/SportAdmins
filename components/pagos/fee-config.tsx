@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
 import { StatusBadge } from "@/components/status-badge"
 import { formatARS, formatFecha } from "@/lib/data"
 import { useDeudas } from "@/lib/deudas-store"
@@ -21,19 +20,21 @@ export function FeeConfig() {
   function guardar() {
     setFees(form)
     toast.success("Configuración guardada", {
-      description: `Cuota por fecha ${formatARS(form.cuotaPorFecha)} · vence a los ${form.vencimientoDias} días.`,
+      description: `Cuota por fecha ${formatARS(form.cuotaPorFecha)}.`,
     })
   }
 
-  // Una jornada ya fue cobrada si existe alguna deuda con su concepto
+  // Cada equipo tiene a lo sumo una cuota por fecha; se generan solo las que faltan
   const conceptoDe = (n: number) => `Fecha ${n} — Cuota de partido`
-  const yaGenerada = (n: number) => deudas.some((d) => d.concepto === conceptoDe(n))
+  const sinCuota = (n: number) =>
+    equipos.filter((e) => !deudas.some((d) => d.equipoId === e.id && d.concepto === conceptoDe(n))).map((e) => e.id)
+  const yaGenerada = (n: number) => sinCuota(n).length === 0
+  const algunaGenerada = (n: number) => deudas.some((d) => d.concepto === conceptoDe(n))
 
   function generarCuotas(numero: number, monto: number) {
-    const habilitados = equipos.filter((e) => !e.bloqueado).map((e) => e.id)
-    const n = crearDeuda({ concepto: conceptoDe(numero), monto, equipoIds: habilitados })
+    const n = crearDeuda({ concepto: conceptoDe(numero), monto, equipoIds: sinCuota(numero) })
     toast.success("Cuotas generadas", {
-      description: `${conceptoDe(numero)} · ${formatARS(monto)} para ${n} equipos habilitados.`,
+      description: `${conceptoDe(numero)} · ${formatARS(monto)} para ${n} equipos.`,
     })
   }
 
@@ -46,60 +47,16 @@ export function FeeConfig() {
           <CardTitle className="text-sm">Valores del torneo</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
-              <Label htmlFor="fee-insc">Inscripción</Label>
-              <Input
-                id="fee-insc"
-                type="number"
-                min={0}
-                value={form.inscripcion}
-                onChange={(e) => setForm({ ...form, inscripcion: num(e.target.value) })}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="fee-fecha">Cuota por fecha</Label>
-              <Input
-                id="fee-fecha"
-                type="number"
-                min={0}
-                value={form.cuotaPorFecha}
-                onChange={(e) => setForm({ ...form, cuotaPorFecha: num(e.target.value) })}
-              />
-            </div>
-          </div>
           <div className="grid gap-2">
-            <Label htmlFor="fee-venc">Días para pagar antes de quedar moroso</Label>
+            <Label htmlFor="fee-fecha">Cuota por fecha</Label>
             <Input
-              id="fee-venc"
+              id="fee-fecha"
               type="number"
               min={0}
-              value={form.vencimientoDias}
-              onChange={(e) => setForm({ ...form, vencimientoDias: num(e.target.value) })}
+              value={form.cuotaPorFecha}
+              onChange={(e) => setForm({ ...form, cuotaPorFecha: num(e.target.value) })}
             />
           </div>
-          <label className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-            <span className="text-sm">
-              <span className="block font-medium text-foreground">Bloqueo automático</span>
-              <span className="text-xs text-muted-foreground">Bloquear al equipo si su deuda supera el tope.</span>
-            </span>
-            <Switch
-              checked={form.bloqueoAutomatico}
-              onCheckedChange={(v) => setForm({ ...form, bloqueoAutomatico: v })}
-            />
-          </label>
-          {form.bloqueoAutomatico && (
-            <div className="grid gap-2">
-              <Label htmlFor="fee-tope">Tope de deuda</Label>
-              <Input
-                id="fee-tope"
-                type="number"
-                min={0}
-                value={form.topeDeuda}
-                onChange={(e) => setForm({ ...form, topeDeuda: num(e.target.value) })}
-              />
-            </div>
-          )}
           <Button onClick={guardar} className="self-start">
             <Save className="size-4" />
             Guardar
@@ -124,7 +81,7 @@ export function FeeConfig() {
                   type="number"
                   min={0}
                   value={j.fee}
-                  disabled={generada}
+                  disabled={algunaGenerada(j.numero)}
                   onChange={(e) => guardarJornada({ ...j, fee: num(e.target.value) })}
                   className="w-28 font-mono"
                   aria-label={`Fee de la jornada ${j.numero}`}

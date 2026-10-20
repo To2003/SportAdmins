@@ -5,13 +5,11 @@ import {
   Receipt,
   AlertTriangle,
   Wallet,
-  Lock,
   ArrowRight,
   CalendarDays,
   Trophy,
   Ban,
   BellRing,
-  ListChecks,
   ClipboardEdit,
   CheckCircle2,
 } from "lucide-react"
@@ -19,7 +17,7 @@ import { PageHeader } from "@/components/page-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { SaldoBadge } from "@/components/status-badge"
 import { FORMATOS, formatARS, formatFecha } from "@/lib/data"
-import { useDeudas } from "@/lib/deudas-store"
+import { saldoEquipo, useDeudas } from "@/lib/deudas-store"
 import { calcularPosiciones, fechasCumplidas, sancionVigente, useTorneo } from "@/lib/torneo-store"
 
 export default function DashboardPage() {
@@ -27,9 +25,8 @@ export default function DashboardPage() {
   const { equipos, partidos, jugadores, sanciones, jornadas, jornadaActual, config } = useTorneo()
 
   const pendientes = deudas.filter((d) => d.estado === "en_revision").length
-  const deudores = equipos.filter((e) => e.saldo < 0)
+  const deudores = equipos.map((e) => ({ ...e, saldo: saldoEquipo(deudas, e.id) })).filter((e) => e.saldo < 0)
   const deudaTotal = deudores.reduce((acc, e) => acc + e.saldo, 0)
-  const bloqueados = equipos.filter((e) => e.bloqueado)
   const recaudado = deudas.filter((d) => d.estado === "aprobado").reduce((a, d) => a + d.monto, 0)
   const topDeudores = [...deudores].sort((a, b) => a.saldo - b.saldo).slice(0, 5)
   const proximos = partidos
@@ -47,14 +44,10 @@ export default function DashboardPage() {
   const sinResultado = partidos.filter(
     (p) => p.setsA === null && (jornadas.find((j) => j.numero === p.jornada)?.estado === "jugada" || p.jornada < jornadaActual),
   ).length
-  const rostersPendientes = equipos.filter((e) => e.roster === "pendiente").length
-  const rostersSinEnviar = equipos.filter((e) => e.roster === "sin-enviar").length
 
   const alertas = [
     { show: pendientes > 0, icon: Receipt, text: `${pendientes} comprobantes esperan validación`, href: "/pagos", tone: "text-warning-foreground" },
-    { show: rostersPendientes > 0, icon: ListChecks, text: `${rostersPendientes} listas de buena fe para aprobar`, href: "/equipos", tone: "text-warning-foreground" },
-    { show: rostersSinEnviar > 0, icon: ListChecks, text: `${rostersSinEnviar} equipos no enviaron su lista`, href: "/equipos", tone: "text-danger" },
-    { show: bloqueados.length > 0, icon: Lock, text: `${bloqueados.length} equipos bloqueados por deuda`, href: "/pagos", tone: "text-danger" },
+    { show: deudores.length > 0, icon: AlertTriangle, text: `${deudores.length} equipos con pagos pendientes`, href: "/pagos", tone: "text-danger" },
     { show: sinResultado > 0, icon: ClipboardEdit, text: `${sinResultado} partidos jugados sin resultado cargado`, href: "/fixture", tone: "text-warning-foreground" },
     {
       show: vigentes.some((s) => s.tipo === "suspension"),
@@ -69,7 +62,6 @@ export default function DashboardPage() {
     { label: "Comprobantes pendientes", value: pendientes, icon: Receipt, href: "/pagos", tone: "text-warning-foreground" },
     { label: "Equipos deudores", value: deudores.length, icon: AlertTriangle, href: "/pagos", tone: "text-danger" },
     { label: "Deuda total", value: formatARS(deudaTotal), icon: Wallet, href: "/pagos", tone: "text-danger" },
-    { label: "Equipos bloqueados", value: bloqueados.length, icon: Lock, href: "/pagos", tone: "text-foreground" },
   ]
 
   return (
@@ -121,7 +113,7 @@ export default function DashboardPage() {
       </Card>
 
       {/* 1.4.5.2 Estado de pagos */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
         {stats.map((s) => {
           const Icon = s.icon
           return (

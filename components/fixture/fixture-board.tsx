@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
 import {
   Select,
   SelectContent,
@@ -23,21 +22,32 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { StatusBadge } from "@/components/status-badge"
-import { canchas, convocatorias as convocatoriasSeed, formatFecha, type Partido } from "@/lib/data"
-import { sancionVigente, useTorneo } from "@/lib/torneo-store"
+import { canchas, formatFecha, type Partido } from "@/lib/data"
+import { generarRoundRobin, useTorneo } from "@/lib/torneo-store"
 
 export function FixtureBoard() {
-  const { partidos, setPartidos, equipos, jugadores: todosJugadores, jornadas: jornadasConfig, jornadaActual, sanciones } = useTorneo()
-  const suspendidos = new Set(
-    sanciones
-      .filter((s) => s.tipo === "suspension" && s.jugadorId && sancionVigente(s, jornadaActual))
-      .map((s) => s.jugadorId),
+  const {
+    partidos: todos,
+    setPartidos,
+    equipos,
+    jornadas: jornadasConfig,
+    agregarJornada,
+    jornadaActual,
+    config,
+    puede,
+    equipoSesion,
+  } = useTorneo()
+  const gestiona = puede("fixture.gestionar")
+  const cargaResultados = puede("resultados.cargar")
+  // El delegado solo ve los partidos de su equipo
+  const miEquipo = equipos.find((e) => e.id === equipoSesion)?.nombre
+  const partidos = useMemo(
+    () => (equipoSesion ? todos.filter((p) => p.equipoA === miEquipo || p.equipoB === miEquipo) : todos),
+    [todos, equipoSesion, miEquipo],
   )
   const [editing, setEditing] = useState<Partido | null>(null)
   const [setsA, setSetsA] = useState("")
   const [setsB, setSetsB] = useState("")
-  const [convocatoriaState, setConvocatoriaState] = useState<Record<string, string[]>>(convocatoriasSeed)
-  const [presentes, setPresentes] = useState<string[]>([])
 
   // Form state
   const [equipoA, setEquipoA] = useState("")
@@ -55,9 +65,49 @@ export function FixtureBoard() {
     return Array.from(grupos.entries()).sort((a, b) => b[0] - a[0])
   }, [partidos])
 
+  // 1.4.2.5: todos contra todos a una ronda, una jornada por ronda. Cancha y horario se definen después.
   function generarAutomatico() {
+    if (equipos.length < 2) {
+      toast.error("Hacen falta al menos 2 equipos participantes")
+      return
+    }
+    const conResultado = todos.filter((p) => p.setsA !== null).length
+    if (
+      todos.length > 0 &&
+      !window.confirm(
+        `Se va a reemplazar el fixture actual (${todos.length} partidos${
+          conResultado ? `, ${conResultado} con resultado cargado` : ""
+        }). ¿Continuar?`,
+      )
+    )
+      return
+    const fechaDe = (numero: number) => {
+      const j = jornadasConfig.find((x) => x.numero === numero)
+      if (j) return j.fecha
+      const d = new Date(config.fechaInicio)
+      d.setDate(d.getDate() + 7 * (numero - 1))
+      return d.toISOString().slice(0, 10)
+    }
+    const rondas = generarRoundRobin(equipos.map((e) => e.nombre))
+    // Crear las jornadas que falten para que aparezcan (y se puedan reprogramar) en la pestaña Jornadas
+    for (let n = jornadasConfig.length; n < rondas.length; n++) agregarJornada()
+    setPartidos(
+      rondas.flatMap((ronda, r) =>
+        ronda.map(([a, b], i) => ({
+          id: `p-${r + 1}-${i + 1}`,
+          jornada: r + 1,
+          fecha: fechaDe(r + 1),
+          equipoA: a,
+          equipoB: b,
+          cancha: "A definir",
+          hora: "A definir",
+          setsA: null,
+          setsB: null,
+        })),
+      ),
+    )
     toast.success("Fixture generado", {
-      description: "Se armó el cruce completo respetando descansos y canchas disponibles.",
+      description: `${rondas.length} jornadas · ${rondas.reduce((n, r) => n + r.length, 0)} partidos (todos contra todos).`,
     })
   }
 
@@ -85,20 +135,10 @@ export function FixtureBoard() {
     setHora("")
   }
 
-  function rosterDe(equipoNombre: string) {
-    const equipoId = equipos.find((e) => e.nombre === equipoNombre)?.id
-    return equipoId ? todosJugadores.filter((j) => j.equipoId === equipoId) : []
-  }
-
   function abrirResultado(p: Partido) {
     setEditing(p)
     setSetsA(p.setsA?.toString() ?? "")
     setSetsB(p.setsB?.toString() ?? "")
-    setPresentes(convocatoriaState[p.id] ?? [])
-  }
-
-  function togglePresente(jugadorId: string) {
-    setPresentes((prev) => (prev.includes(jugadorId) ? prev.filter((id) => id !== jugadorId) : [...prev, jugadorId]))
   }
 
   function guardarResultado() {
@@ -106,91 +146,92 @@ export function FixtureBoard() {
     setPartidos((prev) =>
       prev.map((p) => (p.id === editing.id ? { ...p, setsA: Number(setsA), setsB: Number(setsB) } : p)),
     )
-    setConvocatoriaState((prev) => ({ ...prev, [editing.id]: presentes }))
     toast.success("Resultado cargado", {
-      description: `${editing.equipoA} ${setsA} - ${setsB} ${editing.equipoB}${
-        presentes.length ? ` · ${presentes.length} jugadores presentes` : ""
-      }`,
+      description: `${editing.equipoA} ${setsA} - ${setsB} ${editing.equipoB}`,
     })
     setEditing(null)
   }
 
   return (
     <div className="space-y-5">
-      <Button size="lg" className="w-full gap-2 sm:w-auto" onClick={generarAutomatico}>
-        <Sparkles className="size-4.5" />
-        Generar fixture automático
-      </Button>
+      {gestiona && (
+        <Button size="lg" className="w-full gap-2 sm:w-auto" onClick={generarAutomatico}>
+          <Sparkles className="size-4.5" />
+          Generar fixture automático
+        </Button>
+      )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-sm">
-            <Plus className="size-4 text-primary" />
-            Agregar partido manualmente
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-          <div className="space-y-1.5 lg:col-span-2">
-            <Label className="text-xs">Equipo local</Label>
-            <Select value={equipoA} onValueChange={(v) => setEquipoA(v as string)}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Elegir" />
-              </SelectTrigger>
-              <SelectContent>
-                {equipos.map((e) => (
-                  <SelectItem key={e.id} value={e.nombre}>
-                    {e.nombre}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5 lg:col-span-2">
-            <Label className="text-xs">Equipo visitante</Label>
-            <Select value={equipoB} onValueChange={(v) => setEquipoB(v as string)}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Elegir" />
-              </SelectTrigger>
-              <SelectContent>
-                {equipos.map((e) => (
-                  <SelectItem key={e.id} value={e.nombre}>
-                    {e.nombre}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5 sm:col-span-2 lg:col-span-2">
-            <Label className="text-xs">Cancha</Label>
-            <Select value={cancha} onValueChange={(v) => setCancha(v as string)}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Elegir cancha" />
-              </SelectTrigger>
-              <SelectContent>
-                {canchas.map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {c}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Jornada</Label>
-            <Input type="number" min={1} value={jornada} onChange={(e) => setJornada(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Horario</Label>
-            <Input type="time" value={hora} onChange={(e) => setHora(e.target.value)} />
-          </div>
-          <div className="flex items-end sm:col-span-2 lg:col-span-4">
-            <Button className="w-full sm:w-auto" onClick={agregarPartido}>
-              <Plus className="size-4" />
-              Agregar al fixture
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      {gestiona && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Plus className="size-4 text-primary" />
+              Agregar partido manualmente
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+            <div className="space-y-1.5 lg:col-span-2">
+              <Label className="text-xs">Equipo local</Label>
+              <Select value={equipoA} onValueChange={(v) => setEquipoA(v as string)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Elegir" />
+                </SelectTrigger>
+                <SelectContent>
+                  {equipos.map((e) => (
+                    <SelectItem key={e.id} value={e.nombre}>
+                      {e.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5 lg:col-span-2">
+              <Label className="text-xs">Equipo visitante</Label>
+              <Select value={equipoB} onValueChange={(v) => setEquipoB(v as string)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Elegir" />
+                </SelectTrigger>
+                <SelectContent>
+                  {equipos.map((e) => (
+                    <SelectItem key={e.id} value={e.nombre}>
+                      {e.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5 sm:col-span-2 lg:col-span-2">
+              <Label className="text-xs">Cancha</Label>
+              <Select value={cancha} onValueChange={(v) => setCancha(v as string)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Elegir cancha" />
+                </SelectTrigger>
+                <SelectContent>
+                  {canchas.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Jornada</Label>
+              <Input type="number" min={1} value={jornada} onChange={(e) => setJornada(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Horario</Label>
+              <Input type="time" value={hora} onChange={(e) => setHora(e.target.value)} />
+            </div>
+            <div className="flex items-end sm:col-span-2 lg:col-span-4">
+              <Button className="w-full sm:w-auto" onClick={agregarPartido}>
+                <Plus className="size-4" />
+                Agregar al fixture
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {jornadas.map(([num, lista]) => (
         <section key={num} className="space-y-3">
@@ -239,10 +280,12 @@ export function FixtureBoard() {
                       ) : (
                         <StatusBadge tone="warning">Programado</StatusBadge>
                       )}
-                      <Button variant="outline" size="sm" onClick={() => abrirResultado(p)}>
-                        <Pencil className="size-3.5" />
-                        {jugado ? "Editar resultado" : "Cargar resultado"}
-                      </Button>
+                      {cargaResultados && (
+                        <Button variant="outline" size="sm" onClick={() => abrirResultado(p)}>
+                          <Pencil className="size-3.5" />
+                          {jugado ? "Editar resultado" : "Cargar resultado"}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </Card>
@@ -286,34 +329,6 @@ export function FixtureBoard() {
             </div>
           ) : null}
 
-          {editing
-            ? [editing.equipoA, editing.equipoB].map((equipoNombre) => {
-                const roster = rosterDe(equipoNombre)
-                if (roster.length === 0) return null
-                return (
-                  <div key={equipoNombre} className="space-y-1.5">
-                    <p className="text-xs font-medium text-muted-foreground">Jugadores presentes — {equipoNombre}</p>
-                    <div className="max-h-32 space-y-1 overflow-y-auto rounded-lg border border-border p-2">
-                      {roster.map((j) => (
-                        <label key={j.id} className="flex items-center justify-between gap-2 py-1 text-sm">
-                          <span className="flex min-w-0 items-center gap-2">
-                            <span className="truncate">
-                              #{j.numero} {j.nombre}
-                            </span>
-                            {suspendidos.has(j.id) && <StatusBadge tone="danger">Suspendido</StatusBadge>}
-                          </span>
-                          <Switch
-                            checked={presentes.includes(j.id)}
-                            disabled={suspendidos.has(j.id)}
-                            onCheckedChange={() => togglePresente(j.id)}
-                          />
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })
-            : null}
 
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setEditing(null)}>

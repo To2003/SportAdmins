@@ -28,7 +28,6 @@ import { StatusBadge } from "@/components/status-badge"
 import { PageHeader } from "@/components/page-header"
 import { TIPOS_SANCION, formatARS, formatFecha, type Sancion, type TipoSancion } from "@/lib/data"
 import { fechasCumplidas, sancionVigente, useTorneo } from "@/lib/torneo-store"
-import { useDeudas } from "@/lib/deudas-store"
 import { cn } from "@/lib/utils"
 
 const EQUIPO_COMPLETO = "__equipo__"
@@ -54,8 +53,14 @@ function TipoBadge({ tipo }: { tipo: TipoSancion }) {
 }
 
 export function SancionesPanel() {
-  const { sanciones, equipos, jugadores, jornadaActual, crearSancion, anularSancion } = useTorneo()
-  const { crearDeuda } = useDeudas()
+  const { sanciones: todas, equipos, jugadores, jornadaActual, crearSancion, anularSancion, puede, equipoSesion } =
+    useTorneo()
+  const gestiona = puede("sanciones.gestionar")
+  // El delegado solo ve las sanciones de su equipo
+  const sanciones = useMemo(
+    () => (equipoSesion ? todas.filter((s) => s.equipoId === equipoSesion) : todas),
+    [todas, equipoSesion],
+  )
 
   const [open, setOpen] = useState(false)
   const [equipoId, setEquipoId] = useState("")
@@ -105,13 +110,8 @@ export function SancionesPanel() {
       fechas: tipo === "suspension" ? Number(fechas) : 0,
       monto: tipo === "multa" ? Number(monto) : undefined,
     })
-    // Las multas generan automáticamente la deuda para el equipo
-    if (tipo === "multa") crearDeuda({ concepto: `Multa — ${motivo.trim()}`, monto: Number(monto), equipoIds: [equipoId] })
     toast.success("Sanción registrada", {
-      description:
-        tipo === "multa"
-          ? `Se generó una deuda de ${formatARS(Number(monto))} para ${nombreEquipo(equipoId)}.`
-          : `${jugador(jugadorId)?.nombre ?? nombreEquipo(equipoId)} · ${TIPOS_SANCION[tipo]}`,
+      description: `${jugador(jugadorId)?.nombre ?? nombreEquipo(equipoId)} · ${TIPOS_SANCION[tipo]}`,
     })
     limpiar()
     setOpen(false)
@@ -132,10 +132,12 @@ export function SancionesPanel() {
   return (
     <>
       <PageHeader title="Sanciones" description={`Registro disciplinario del torneo · Jornada ${jornadaActual}`}>
-        <Button size="sm" onClick={() => setOpen(true)}>
-          <Plus className="size-4" />
-          Registrar sanción
-        </Button>
+        {gestiona && (
+          <Button size="sm" onClick={() => setOpen(true)}>
+            <Plus className="size-4" />
+            Registrar sanción
+          </Button>
+        )}
       </PageHeader>
 
       <div className="mb-5 grid grid-cols-3 gap-3">
@@ -209,19 +211,21 @@ export function SancionesPanel() {
                           </p>
                         </div>
                       )}
-                      <div className="flex justify-end">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            anularSancion(s.id)
-                            toast.success("Sanción anulada")
-                          }}
-                        >
-                          <Undo2 className="size-3.5" />
-                          Anular
-                        </Button>
-                      </div>
+                      {gestiona && (
+                        <div className="flex justify-end">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              anularSancion(s.id)
+                              toast.success("Sanción anulada")
+                            }}
+                          >
+                            <Undo2 className="size-3.5" />
+                            Anular
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </Card>
                 )
@@ -273,7 +277,7 @@ export function SancionesPanel() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Registrar sanción</DialogTitle>
-            <DialogDescription>Las multas generan automáticamente una deuda para el equipo.</DialogDescription>
+            <DialogDescription>Registrá una amonestación, suspensión por fechas o multa.</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4 py-2">
             <div className="grid gap-2">

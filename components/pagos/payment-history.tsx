@@ -5,6 +5,7 @@ import { Banknote, Receipt, Wallet } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
   Select,
@@ -28,25 +29,28 @@ import { useTorneo } from "@/lib/torneo-store"
 
 export function PaymentHistory() {
   const { deudas, registrarPagoManual } = useDeudas()
-  const { equipos } = useTorneo()
-  const [equipoFilter, setEquipoFilter] = useState("todos")
+  const { equipos, equipoSesion, puede } = useTorneo()
+  const [equipoFilterState, setEquipoFilter] = useState("todos")
+  // El delegado solo ve su equipo, incluidas las deudas todavía impagas
+  const equipoFilter = equipoSesion ?? equipoFilterState
   const [estadoFilter, setEstadoFilter] = useState("todos")
   const [preview, setPreview] = useState<Deuda | null>(null)
 
   const [registrarOpen, setRegistrarOpen] = useState(false)
   const [regEquipo, setRegEquipo] = useState("")
   const [regDeuda, setRegDeuda] = useState("")
+  const [regImagen, setRegImagen] = useState<string>()
 
   const nombreEquipo = (id: string) => equipos.find((e) => e.id === id)?.nombre ?? "—"
 
   const resueltas = useMemo(
     () =>
       deudas
-        .filter((d) => d.estado === "aprobado" || d.estado === "rechazado")
+        .filter((d) => equipoSesion || d.estado === "aprobado" || d.estado === "rechazado")
         .filter((d) => equipoFilter === "todos" || d.equipoId === equipoFilter)
         .filter((d) => estadoFilter === "todos" || d.estado === estadoFilter)
         .sort((a, b) => (b.resueltoEl ?? b.creadoEl).localeCompare(a.resueltoEl ?? a.creadoEl)),
-    [deudas, equipoFilter, estadoFilter],
+    [deudas, equipoFilter, estadoFilter, equipoSesion],
   )
 
   const cobrado = resueltas.filter((d) => d.estado === "aprobado").reduce((a, d) => a + d.monto, 0)
@@ -58,11 +62,14 @@ export function PaymentHistory() {
       toast.error("Elegí la deuda que se está pagando")
       return
     }
-    registrarPagoManual(d.id)
-    toast.success("Pago registrado", { description: `${nombreEquipo(d.equipoId)} · ${d.concepto} · ${formatARS(d.monto)}` })
+    registrarPagoManual(d.id, regImagen)
+    toast.success(regImagen ? "Comprobante enviado al Buzón" : "Pago registrado", {
+      description: `${nombreEquipo(d.equipoId)} · ${d.concepto} · ${formatARS(d.monto)}`,
+    })
     setRegistrarOpen(false)
     setRegEquipo("")
     setRegDeuda("")
+    setRegImagen(undefined)
   }
 
   return (
@@ -78,19 +85,21 @@ export function PaymentHistory() {
           </div>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
-          <Select value={equipoFilter} onValueChange={(v) => setEquipoFilter(v as string)}>
-            <SelectTrigger className="w-full sm:w-48">
-              <SelectValue placeholder="Todos los equipos" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos los equipos</SelectItem>
-              {equipos.map((e) => (
-                <SelectItem key={e.id} value={e.id}>
-                  {e.nombre}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {!equipoSesion && (
+            <Select value={equipoFilter} onValueChange={(v) => setEquipoFilter(v as string)}>
+              <SelectTrigger className="w-full sm:w-48">
+                <SelectValue placeholder="Todos los equipos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos los equipos</SelectItem>
+                {equipos.map((e) => (
+                  <SelectItem key={e.id} value={e.id}>
+                    {e.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Select value={estadoFilter} onValueChange={(v) => setEstadoFilter(v as string)}>
             <SelectTrigger className="w-full sm:w-36">
               <SelectValue />
@@ -99,12 +108,16 @@ export function PaymentHistory() {
               <SelectItem value="todos">Todos</SelectItem>
               <SelectItem value="aprobado">Aprobados</SelectItem>
               <SelectItem value="rechazado">Rechazados</SelectItem>
+              {equipoSesion && <SelectItem value="pendiente">Pendientes</SelectItem>}
+              {equipoSesion && <SelectItem value="en_revision">En revisión</SelectItem>}
             </SelectContent>
           </Select>
-          <Button variant="outline" onClick={() => setRegistrarOpen(true)}>
-            <Banknote className="size-4" />
-            Registrar pago en efectivo
-          </Button>
+          {puede("pagos.validar") && (
+            <Button variant="outline" onClick={() => setRegistrarOpen(true)}>
+              <Banknote className="size-4" />
+              Registrar pago
+            </Button>
+          )}
         </div>
       </div>
 
@@ -168,8 +181,11 @@ export function PaymentHistory() {
       <Dialog open={registrarOpen} onOpenChange={setRegistrarOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Registrar pago en efectivo</DialogTitle>
-            <DialogDescription>Para pagos recibidos en mano en la cancha, sin comprobante digital.</DialogDescription>
+            <DialogTitle>Registrar pago</DialogTitle>
+            <DialogDescription>
+              Con comprobante adjunto, el pago pasa al Buzón para aprobarlo o rechazarlo. Sin comprobante, se registra
+              como pago en efectivo.
+            </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4 py-2">
             <div className="grid gap-2">
@@ -217,6 +233,24 @@ export function PaymentHistory() {
                 )}
               </div>
             )}
+            <div className="grid gap-2">
+              <Label htmlFor="reg-comprobante">Comprobante (opcional)</Label>
+              <Input
+                id="reg-comprobante"
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file && !file.type.startsWith("image/")) {
+                    toast.error("El comprobante tiene que ser una imagen")
+                    e.target.value = ""
+                    return
+                  }
+                  // shortcut: URL en memoria del navegador, se pierde al recargar; reemplazar por upload real con backend
+                  setRegImagen(file ? URL.createObjectURL(file) : undefined)
+                }}
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRegistrarOpen(false)}>

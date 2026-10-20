@@ -7,24 +7,31 @@ import { PaymentInbox } from "@/components/pagos/payment-inbox"
 import { DelinquencyTable } from "@/components/pagos/delinquency-table"
 import { PaymentHistory } from "@/components/pagos/payment-history"
 import { FeeConfig } from "@/components/pagos/fee-config"
-import { NuevaDeudaDialog } from "@/components/pagos/nueva-deuda-dialog"
+import { useTorneo } from "@/lib/torneo-store"
 
 export default function PagosPage() {
+  const { puede } = useTorneo()
+  const valida = puede("pagos.validar")
+  const configura = puede("pagos.configurar")
   return (
     <>
       <PageHeader
         title="Pagos"
-        description="Configurá los fees, validá comprobantes y controlá la morosidad de los equipos del torneo."
-      >
-        <NuevaDeudaDialog />
-      </PageHeader>
-      <Tabs defaultValue="buzon" className="gap-5">
+        description={
+          valida || configura
+            ? "Configurá los fees, validá comprobantes y controlá la morosidad de los equipos del torneo."
+            : "Estado de pagos de tu equipo."
+        }
+      />
+      <Tabs defaultValue={valida ? "buzon" : configura ? "config" : "morosidad"} className="gap-5">
         <div className="overflow-x-auto">
           <TabsList className="h-9">
-            <TabsTrigger value="buzon">
-              <Inbox className="size-4" />
-              Buzón
-            </TabsTrigger>
+            {valida && (
+              <TabsTrigger value="buzon">
+                <Inbox className="size-4" />
+                Buzón
+              </TabsTrigger>
+            )}
             <TabsTrigger value="morosidad">
               <TrendingDown className="size-4" />
               Estado por equipo
@@ -33,24 +40,30 @@ export default function PagosPage() {
               <History className="size-4" />
               Historial
             </TabsTrigger>
-            <TabsTrigger value="config">
-              <Settings2 className="size-4" />
-              Fees
-            </TabsTrigger>
+            {configura && (
+              <TabsTrigger value="config">
+                <Settings2 className="size-4" />
+                Fees
+              </TabsTrigger>
+            )}
           </TabsList>
         </div>
-        <TabsContent value="buzon">
-          <PaymentInbox />
-        </TabsContent>
+        {valida && (
+          <TabsContent value="buzon">
+            <PaymentInbox />
+          </TabsContent>
+        )}
         <TabsContent value="morosidad">
           <DelinquencyTable />
         </TabsContent>
         <TabsContent value="historial">
           <PaymentHistory />
         </TabsContent>
-        <TabsContent value="config">
-          <FeeConfig />
-        </TabsContent>
+        {configura && (
+          <TabsContent value="config">
+            <FeeConfig />
+          </TabsContent>
+        )}
       </Tabs>
     </>
   )

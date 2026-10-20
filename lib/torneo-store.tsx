@@ -34,8 +34,6 @@ interface TorneoContextValue {
   equipos: Equipo[]
   guardarEquipo: (e: Equipo) => void
   eliminarEquipo: (id: string) => void
-  setRoster: (id: string, roster: Equipo["roster"]) => void
-  setBloqueo: (id: string, bloqueado: boolean) => void
 
   jugadores: Jugador[]
   guardarJugador: (j: Jugador) => void
@@ -62,6 +60,8 @@ interface TorneoContextValue {
   iniciarSesion: (u: Usuario) => void
   cerrarSesion: () => void
   puede: (permiso: Permiso) => boolean
+  /** Equipo del delegado logueado; undefined para admin/tesorero (ven todos los equipos). */
+  equipoSesion?: string
 }
 
 const TorneoContext = createContext<TorneoContextValue | null>(null)
@@ -105,8 +105,6 @@ export function TorneoProvider({ children }: { children: ReactNode }) {
       equipos,
       guardarEquipo: (e) => setEquipos((prev) => upsert(prev, e)),
       eliminarEquipo: (id) => setEquipos((prev) => prev.filter((e) => e.id !== id)),
-      setRoster: (id, roster) => setEquipos((prev) => prev.map((e) => (e.id === id ? { ...e, roster } : e))),
-      setBloqueo: (id, bloqueado) => setEquipos((prev) => prev.map((e) => (e.id === id ? { ...e, bloqueado } : e))),
 
       jugadores,
       guardarJugador: (j) => setJugadores((prev) => upsert(prev, j)),
@@ -114,8 +112,11 @@ export function TorneoProvider({ children }: { children: ReactNode }) {
 
       jornadas,
       jornadaActual,
-      guardarJornada: (j) =>
-        setJornadas((prev) => prev.map((x) => (x.numero === j.numero ? j : x)).sort((a, b) => a.numero - b.numero)),
+      guardarJornada: (j) => {
+        setJornadas((prev) => prev.map((x) => (x.numero === j.numero ? j : x)).sort((a, b) => a.numero - b.numero))
+        // Los partidos de la jornada siguen su fecha (reprogramación)
+        setPartidos((prev) => prev.map((p) => (p.jornada === j.numero ? { ...p, fecha: j.fecha } : p)))
+      },
       agregarJornada: () =>
         setJornadas((prev) => {
           const ultima = prev[prev.length - 1]
@@ -164,6 +165,7 @@ export function TorneoProvider({ children }: { children: ReactNode }) {
       },
       // Sin sesión (ej: entrando directo por URL a la demo) se muestra todo como administrador
       puede: (permiso) => permisos[sesion?.rol ?? "admin"].includes(permiso),
+      equipoSesion: sesion?.rol === "delegado" ? sesion.equipoId : undefined,
     }
   }, [config, fees, equipos, jugadores, jornadas, partidos, sanciones, usuarios, permisos, sesion])
 
@@ -190,6 +192,28 @@ export function sancionVigente(s: Sancion, jornadaActual: number) {
   if (s.tipo === "suspension") return fechasCumplidas(s, jornadaActual) < s.fechas
   if (s.tipo === "amonestacion") return s.jornadaInicio >= jornadaActual - 1
   return false
+}
+
+/**
+ * Fixture todos contra todos a una ronda (método del círculo): una lista de cruces por jornada.
+ * Con cantidad impar de equipos, uno descansa en cada jornada.
+ */
+export function generarRoundRobin(nombres: string[]): [string, string][][] {
+  const lista: (string | null)[] = nombres.length % 2 ? [...nombres, null] : [...nombres]
+  const n = lista.length
+  const rondas: [string, string][][] = []
+  for (let r = 0; r < n - 1; r++) {
+    const ronda: [string, string][] = []
+    for (let i = 0; i < n / 2; i++) {
+      const a = lista[i]
+      const b = lista[n - 1 - i]
+      // Alternar localía del primer equipo para que no sea siempre local
+      if (a && b) ronda.push(r % 2 ? [b, a] : [a, b])
+    }
+    rondas.push(ronda)
+    lista.splice(1, 0, lista.pop()!)
+  }
+  return rondas
 }
 
 export interface FilaPosicion {

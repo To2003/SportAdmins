@@ -1,6 +1,5 @@
 import { cn } from "@/lib/utils"
 import { CheckCircle2, Clock, XCircle, CircleDashed } from "lucide-react"
-import { PARTIDOS_MINIMOS_PLAYOFF } from "@/lib/data"
 
 type Tone = "success" | "warning" | "danger" | "neutral"
 
@@ -58,40 +57,6 @@ export function PagoBadge({ estado }: { estado: "pendiente" | "en_revision" | "a
   return (
     <StatusBadge tone="danger" icon={<XCircle className="size-3.5" />}>
       Rechazado
-    </StatusBadge>
-  )
-}
-
-export function RosterBadge({ estado }: { estado: "sin-enviar" | "pendiente" | "aprobado" }) {
-  if (estado === "aprobado")
-    return (
-      <StatusBadge tone="success" icon={<CheckCircle2 className="size-3.5" />}>
-        Aprobado
-      </StatusBadge>
-    )
-  if (estado === "pendiente")
-    return (
-      <StatusBadge tone="warning" icon={<Clock className="size-3.5" />}>
-        Pendiente
-      </StatusBadge>
-    )
-  return (
-    <StatusBadge tone="neutral" icon={<CircleDashed className="size-3.5" />}>
-      Sin enviar
-    </StatusBadge>
-  )
-}
-
-export function PlayoffBadge({ jugados }: { jugados: number }) {
-  if (jugados >= PARTIDOS_MINIMOS_PLAYOFF)
-    return (
-      <StatusBadge tone="success" icon={<CheckCircle2 className="size-3.5" />}>
-        Habilitado
-      </StatusBadge>
-    )
-  return (
-    <StatusBadge tone="neutral" icon={<Clock className="size-3.5" />}>
-      {jugados}/{PARTIDOS_MINIMOS_PLAYOFF} partidos
     </StatusBadge>
   )
 }
